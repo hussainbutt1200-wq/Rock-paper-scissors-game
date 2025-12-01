@@ -1,4 +1,3 @@
-// backend/server.js
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -12,58 +11,47 @@ const initSockets = require("./sockets");
 
 const app = express();
 
-// 1) Connect to MongoDB
 connectDB();
 
-// 2) Allowed origins (frontend URLs)
+// Read client URL from env or fall back to local
+const CLIENT_URL = process.env.CLIENT_URL;
+console.log("CLIENT_URL from ENV =>", CLIENT_URL);
+
 const allowedOrigins = [
-  process.env.CLIENT_URL,      // e.g. https://rock-paper-scissors-game-vnno.vercel.app
+  CLIENT_URL,
   "http://localhost:5173",
-  "http://127.0.0.1:5173",
-].filter(Boolean);
+  "http://127.0.0.1:5173"
+].filter(Boolean); // remove undefined or empty values
 
-// 3) CORS options (same for HTTP and WebSocket)
-const corsOptions = {
-  origin(origin, callback) {
-    // Allow requests with no origin (like curl, Postman)
-    if (!origin) return callback(null, true);
+console.log("Allowed Origins =>", allowedOrigins);
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 
-    console.log("❌ CORS blocked origin:", origin);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-};
-
-// 4) Middlewares
-app.use(cors(corsOptions));
 app.use(express.json());
-
-// 5) Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 
-// Simple health check
-app.get("/", (req, res) => {
-  res.send("Backend Running");
-});
+app.get("/", (req, res) => res.send("Backend Running"));
 
-// 6) HTTP + Socket.io server
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 initSockets(io);
 
-// 7) Start server
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
-  console.log(`✅ Backend running on port ${PORT}`);
-  console.log("✅ Allowed origins:", allowedOrigins);
+  console.log(`Backend running on port ${PORT}`);
 });

@@ -1,5 +1,7 @@
 // frontend/src/services/socket.js
 import { io } from "socket.io-client";
+import { connectSocket, getSocket } from "../services/socket.js";
+
 
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";

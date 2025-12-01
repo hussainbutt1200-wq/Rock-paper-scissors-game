@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import api from "../services/api";
-import { connectSocket, getSocket } from "../services/socket.js";
-
+import { getSocket } from "../services/socket.js";
 
 const AuthContext = createContext(null);
 
@@ -12,12 +11,12 @@ export const AuthProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
 
   // When user is set and we have a token, connect socket
-  useEffect(() => {
-    if (user) {
-      const s = connectSocket();
-      setSocket(s);
-    }
-  }, [user]);
+ useEffect(() => {
+  if (user) {
+    const s = getSocket();   // ⬅ use getSocket directly
+    setSocket(s);
+  }
+}, [user]);
 
   const login = async (email, password) => {
     const res = await api.post("/api/auth/login", { email, password });

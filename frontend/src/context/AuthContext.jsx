@@ -1,5 +1,6 @@
-// frontend/src/context/AuthContext.jsx
+// at the top
 import { createContext, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { connectSocket } from "../services/socket";
 
@@ -10,57 +11,46 @@ export const AuthProvider = ({ children }) => {
     () => JSON.parse(localStorage.getItem("user")) || null
   );
   const [socket, setSocket] = useState(null);
-  const [authError, setAuthError] = useState("");
+  const navigate = useNavigate();
 
-  // connect socket when user is set
+  // when user has a token, connect socket
   useEffect(() => {
-    if (user) {
+    if (user && !socket) {
       const s = connectSocket();
       setSocket(s);
     }
   }, [user]);
 
-  const register = async (username, email, password) => {
-    setAuthError("");
-    try {
-      const res = await api.post("/api/auth/register", {
-        username,
-        email,
-        password,
-      });
+  const login = async (email, password) => {
+    const res = await api.post("/api/auth/login", { email, password });
+    const { token, user: userData } = res.data;
 
-      // backend should return { token, user }
-      const { token, user } = res.data;
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      setUser(user);
-    } catch (err) {
-      const msg = err.response?.data?.message || "Registration failed";
-      setAuthError(msg);
-      console.error("Register error:", err.response?.data || err.message);
-    }
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setUser(userData);
+    navigate("/lobby");
   };
 
-  const login = async (email, password) => {
-    setAuthError("");
-    try {
-      const res = await api.post("/api/auth/login", { email, password });
+  const logout = () => {
+    // clear storage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
 
-      const { token, user } = res.data;
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      setUser(user);
-    } catch (err) {
-      const msg = err.response?.data?.message || "Invalid credentials";
-      setAuthError(msg);
-      console.error("Login error:", err.response?.data || err.message);
+    // disconnect socket
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
     }
+
+    // clear user state
+    setUser(null);
+
+    // navigate back to login
+    navigate("/login");
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, socket, authError, register, login }}
-    >
+    <AuthContext.Provider value={{ user, socket, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

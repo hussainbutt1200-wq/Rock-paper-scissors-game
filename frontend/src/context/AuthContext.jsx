@@ -1,6 +1,7 @@
+// frontend/src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
 import api from "../services/api";
-import { getSocket } from "../services/socket.js";
+import { connectSocket } from "../services/socket";
 
 const AuthContext = createContext(null);
 
@@ -9,54 +10,57 @@ export const AuthProvider = ({ children }) => {
     () => JSON.parse(localStorage.getItem("user")) || null
   );
   const [socket, setSocket] = useState(null);
+  const [authError, setAuthError] = useState("");
 
-  // When user is set and we have a token, connect socket
- useEffect(() => {
-  if (user) {
-    const s = getSocket();   // ⬅ use getSocket directly
-    setSocket(s);
-  }
-}, [user]);
-
-  const login = async (email, password) => {
-    const res = await api.post("/api/auth/login", { email, password });
-    const { token, user } = res.data;
-
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-
-    setUser(user);
-    const s = connectSocket();
-    setSocket(s);
-  };
+  // connect socket when user is set
+  useEffect(() => {
+    if (user) {
+      const s = connectSocket();
+      setSocket(s);
+    }
+  }, [user]);
 
   const register = async (username, email, password) => {
-    const res = await api.post("/api/auth/register", {
-      username,
-      email,
-      password,
-    });
-    const { token, user } = res.data;
+    setAuthError("");
+    try {
+      const res = await api.post("/api/auth/register", {
+        username,
+        email,
+        password,
+      });
 
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-
-    setUser(user);
-    const s = connectSocket();
-    setSocket(s);
+      // backend should return { token, user }
+      const { token, user } = res.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      setUser(user);
+    } catch (err) {
+      const msg = err.response?.data?.message || "Registration failed";
+      setAuthError(msg);
+      console.error("Register error:", err.response?.data || err.message);
+    }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    const s = getSocket();
-    if (s) s.disconnect();
-    setSocket(null);
-    setUser(null);
+  const login = async (email, password) => {
+    setAuthError("");
+    try {
+      const res = await api.post("/api/auth/login", { email, password });
+
+      const { token, user } = res.data;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      setUser(user);
+    } catch (err) {
+      const msg = err.response?.data?.message || "Invalid credentials";
+      setAuthError(msg);
+      console.error("Login error:", err.response?.data || err.message);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, socket, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, socket, authError, register, login }}
+    >
       {children}
     </AuthContext.Provider>
   );

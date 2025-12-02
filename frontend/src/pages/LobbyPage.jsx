@@ -16,12 +16,15 @@ const LobbyPage = () => {
     const s = socket || getSocket();
     if (!s) return;
 
+    // how many players online
     s.on("onlineCount", (count) => setOnlineCount(count));
 
+    // global chat messages
     s.on("chat:newMessage", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
 
+    // matchmaking -> go to room
     s.on("room:joined", (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
@@ -38,7 +41,13 @@ const LobbyPage = () => {
     e.preventDefault();
     const s = socket || getSocket();
     if (!s || !chatInput.trim()) return;
-    s.emit("chat:message", { text: chatInput });
+
+    // 👉 send username along with the text
+    s.emit("chat:message", {
+      text: chatInput.trim(),
+      username: user?.username || "Guest",
+    });
+
     setChatInput("");
   };
 
@@ -64,7 +73,11 @@ const LobbyPage = () => {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-300">
-            {user && <>Signed in as <strong>{user.username}</strong></>}
+            {user && (
+              <>
+                Signed in as <strong>{user.username}</strong>
+              </>
+            )}
           </span>
           <Link
             to="/leaderboard"
@@ -105,7 +118,7 @@ const LobbyPage = () => {
 
         {/* Right: global chat */}
         <section className="flex-1 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col">
-          <div className="flex items-center justify-between mb  -2">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold">Global Chat</h2>
             <span className="text-xs text-slate-400">
               Chat with everyone in the lobby.

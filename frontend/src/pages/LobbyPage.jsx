@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
+import { getSocket } from "../services/socket";
 
 const LobbyPage = () => {
   const { user, logout, socket } = useAuth();
@@ -13,46 +14,54 @@ const LobbyPage = () => {
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    // wait until we actually have a user + socket
-    if (!user || !socket) return;
+    // 💡 Use either context socket OR fallback getSocket()
+    const s = socket || getSocket();
+    if (!s || !user) return;
 
-    // 👉 tell backend this user entered the lobby
-    socket.emit("lobby:join");
+    // tell backend we entered the lobby (helps onlineCount work)
+    s.emit("lobby:join");
 
-    const handleOnlineCount = (count) => setOnlineCount(count);
-    const handleNewMessage = (msg) =>
+    const handleOnline = (count) => setOnlineCount(count);
+    const handleNewMessage = (msg) => {
       setMessages((prev) => [...prev, msg]);
+    };
     const handleRoomJoined = (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
     };
 
-    socket.on("onlineCount", handleOnlineCount);
-    socket.on("chat:newMessage", handleNewMessage);
-    socket.on("room:joined", handleRoomJoined);
+    s.on("onlineCount", handleOnline);
+    s.on("chat:newMessage", handleNewMessage);
+    s.on("room:joined", handleRoomJoined);
 
-    // cleanup when leaving lobby
     return () => {
-      socket.emit("lobby:leave");
-      socket.off("onlineCount", handleOnlineCount);
-      socket.off("chat:newMessage", handleNewMessage);
-      socket.off("room:joined", handleRoomJoined);
+      // leaving lobby
+      s.emit("lobby:leave");
+      s.off("onlineCount", handleOnline);
+      s.off("chat:newMessage", handleNewMessage);
+      s.off("room:joined", handleRoomJoined);
     };
-  }, [user, socket, navigate]);
+  }, [socket, user, navigate]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!socket || !chatInput.trim()) return;
+    const s = socket || getSocket();
+    if (!s || !chatInput.trim()) return;
 
-    // send message to backend; backend will broadcast chat:newMessage
-    socket.emit("chat:message", { text: chatInput });
+    // ✅ include username so it shows in UI for everyone
+    s.emit("chat:message", {
+      text: chatInput,
+      username: user?.username,
+    });
+
     setChatInput("");
   };
 
   const handleJoinQueue = () => {
-    if (!socket) return;
+    const s = socket || getSocket();
+    if (!s) return;
     setSearching(true);
-    socket.emit("queue:join");
+    s.emit("queue:join");
   };
 
   return (

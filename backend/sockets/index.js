@@ -12,10 +12,10 @@ const matchmakingQueue = [];
 // roomId -> { id, players: [{ userId, username, socketId }], moves: {}, status }
 const rooms = new Map();
 
-const ROOM_SIZE = 2; // we make 2-player rooms (valid 2–4)
+const ROOM_SIZE = 2; // 2-player rooms
 
 function initSockets(io) {
-  // auth middleware for sockets
+  // ---------- Auth middleware for sockets ----------
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("No token"));
@@ -29,10 +29,11 @@ function initSockets(io) {
     }
   });
 
+  // ---------- Main connection handler ----------
   io.on("connection", async (socket) => {
     const userId = socket.user.id;
 
-    // get username for this user
+    // Get username from DB
     let userDoc;
     try {
       userDoc = await User.findById(userId).select("username");
@@ -42,12 +43,11 @@ function initSockets(io) {
     const username = userDoc?.username || "User";
 
     onlineUsers.set(socket.id, { userId, username });
-
     broadcastOnlineCount(io);
 
     console.log("🔌 Socket connected:", socket.id, "user:", userId, username);
 
-    // -------- GLOBAL CHAT --------
+    // ========== 1) GLOBAL LOBBY CHAT ==========
     socket.on("chat:message", (payload) => {
       const text = (payload?.text || "").toString().trim();
       if (!text) return;
@@ -60,18 +60,16 @@ function initSockets(io) {
         createdAt: new Date().toISOString(),
       };
 
-      // broadcast to everyone
+      // send to everyone in lobby
       io.emit("chat:newMessage", msg);
     });
 
-    // -------- MATCHMAKING QUEUE --------
+    // ========== 2) MATCHMAKING QUEUE ==========
     socket.on("queue:join", () => {
       const info = onlineUsers.get(socket.id) || { userId, username };
 
       // already in a room?
-      if (findRoomByUser(info.userId)) {
-        return;
-      }
+      if (findRoomByUser(info.userId)) return;
 
       // already in queue?
       const alreadyQueued = matchmakingQueue.some(
@@ -86,17 +84,40 @@ function initSockets(io) {
       });
 
       console.log("🎯 User joined queue:", info.username);
-
       matchPlayers(io);
     });
 
-    // -------- GAME MOVE --------
+    // ========== 3) ROOM CHAT (per game room) ==========
+    // Frontend emits: socket.emit("room:chat", { roomId, text })
+    socket.on("room:chat", ({ roomId, text }) => {
+      const messageText = (text || "").toString().trim();
+      if (!roomId || !messageText) return;
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const info = onlineUsers.get(socket.id);
+      const msg = {
+        roomId,
+        userId: info?.userId || socket.user.id,
+        username: info?.username || "User",
+        text: messageText,
+        createdAt: new Date().toISOString(),
+      };
+
+      // only players in that room receive it
+      io.to(roomId).emit("room:chat:new", msg);
+    });
+
+    // ========== 4) GAME MOVES ==========
     socket.on("game:move", async ({ roomId, move }) => {
       const room = rooms.get(roomId);
       if (!room) return;
 
       const player = room.players.find(
-        (p) => p.socketId === socket.id || p.userId.toString() === userId.toString()
+        (p) =>
+          p.socketId === socket.id ||
+          p.userId.toString() === userId.toString()
       );
       if (!player) return;
 
@@ -117,7 +138,7 @@ function initSockets(io) {
       }
     });
 
-    // -------- DISCONNECT --------
+    // ========== 5) DISCONNECT ==========
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected:", socket.id, userId);
 
@@ -146,7 +167,7 @@ function initSockets(io) {
             username: p.username,
           }));
           io.to(room.id).emit("room:updatePlayers", publicPlayers);
-          io.to(room.id).emit("room:ended"); // you can change this behaviour if you want
+          io.to(room.id).emit("room:ended");
           rooms.delete(room.id);
         }
       }
@@ -164,7 +185,6 @@ function broadcastOnlineCount(io) {
 }
 
 function matchPlayers(io) {
-  // as long as at least ROOM_SIZE players in queue, create rooms
   while (matchmakingQueue.length >= ROOM_SIZE) {
     const players = matchmakingQueue.splice(0, ROOM_SIZE);
 
@@ -229,12 +249,10 @@ async function finishRound(io, roomId) {
 
   const players = room.players;
   if (players.length !== 2) {
-    // simple 2-player logic; for >2 you can extend later
     console.warn("Room", roomId, "has", players.length, "players; expected 2");
   }
 
-  const p1 = players[0];
-  const p2 = players[1];
+  const [p1, p2] = players;
 
   const m1 = moves[p1.userId];
   const m2 = moves[p2.userId];
@@ -267,13 +285,11 @@ async function finishRound(io, roomId) {
     },
   ];
 
-  // update DB stats
   try {
     if (!draw && winnerId) {
       await User.findByIdAndUpdate(winnerId, { $inc: { wins: 1 } });
-      const loserId = winnerId.toString() === p1.userId.toString()
-        ? p2.userId
-        : p1.userId;
+      const loserId =
+        winnerId.toString() === p1.userId.toString() ? p2.userId : p1.userId;
       await User.findByIdAndUpdate(loserId, { $inc: { losses: 1 } });
     }
   } catch (e) {
@@ -290,23 +306,3 @@ async function finishRound(io, roomId) {
 }
 
 module.exports = initSockets;
- // -------- ROOM CHAT (per game room) --------
-    socket.on("room:chat", ({ roomId, text }) => {
-      const messageText = (text || "").toString().trim();
-      if (!roomId || !messageText) return;
-
-      const room = rooms.get(roomId);
-      if (!room) return;
-
-      const info = onlineUsers.get(socket.id);
-      const msg = {
-        roomId,
-        userId: info?.userId || socket.user.id,
-        username: info?.username || "User",
-        text: messageText,
-        createdAt: new Date().toISOString(),
-      };
-
-      // only players in that room receive it
-      io.to(roomId).emit("room:chat:new", msg);
-    });

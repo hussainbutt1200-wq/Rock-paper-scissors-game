@@ -1,3 +1,4 @@
+// frontend/src/pages/LobbyPage.jsx
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -16,17 +17,15 @@ const LobbyPage = () => {
     const s = socket || getSocket();
     if (!s) return;
 
-    // Online count
-    s.on("onlineCount", (count) => {
-      setOnlineCount(count);
-    });
+    // online users count
+    s.on("onlineCount", (count) => setOnlineCount(count));
 
-    // Global chat
+    // global lobby chat
     s.on("chat:newMessage", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
 
-    // Room joined
+    // when server matches players and joins a room
     s.on("room:joined", (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
@@ -42,8 +41,14 @@ const LobbyPage = () => {
   const handleSendMessage = (e) => {
     e.preventDefault();
     const s = socket || getSocket();
-    if (!s || !chatInput.trim()) return;
-    s.emit("chat:message", { text: chatInput });
+    const text = chatInput.trim();
+    if (!s || !text) return;
+
+    s.emit("chat:message", {
+      text,
+      username: user?.username, // backend still uses DB username but this is fine
+    });
+
     setChatInput("");
   };
 
@@ -56,24 +61,32 @@ const LobbyPage = () => {
 
   return (
     <div style={{ padding: 20 }}>
-      <header style={{ display: "flex", justifyContent: "space-between" }}>
-        <h2>Lobby</h2>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <div>
+          <h2>Lobby</h2>
+          <p>Online players: {onlineCount}</p>
+        </div>
         <div>
           <span style={{ marginRight: 10 }}>
             Logged in as: <strong>{user?.username}</strong>
           </span>
-          <button onClick={logout}>Logout</button>
+          <button onClick={logout} style={{ marginRight: 10 }}>
+            Logout
+          </button>
+          <Link to="/leaderboard">
+            <button>Leaderboard</button>
+          </Link>
         </div>
       </header>
 
-      <p>Online users: {onlineCount}</p>
-
       <button onClick={handleJoinQueue} disabled={searching}>
         {searching ? "Searching for players..." : "Join Matchmaking Queue"}
-      </button>
-
-      <button style={{ marginLeft: 10 }}>
-        <Link to="/leaderboard">Leaderboard</Link>
       </button>
 
       <div

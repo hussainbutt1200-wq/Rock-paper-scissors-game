@@ -14,44 +14,41 @@ const LobbyPage = () => {
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    // 💡 Use either context socket OR fallback getSocket()
     const s = socket || getSocket();
-    if (!s || !user) return;
+    if (!s) return;
 
-    // tell backend we entered the lobby (helps onlineCount work)
-    s.emit("lobby:join");
+    const handleOnlineCount = (count) => setOnlineCount(count);
 
-    const handleOnline = (count) => setOnlineCount(count);
     const handleNewMessage = (msg) => {
       setMessages((prev) => [...prev, msg]);
     };
+
     const handleRoomJoined = (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
     };
 
-    s.on("onlineCount", handleOnline);
+    s.on("onlineCount", handleOnlineCount);
     s.on("chat:newMessage", handleNewMessage);
     s.on("room:joined", handleRoomJoined);
 
+    // cleanup when component unmounts / socket changes
     return () => {
-      // leaving lobby
-      s.emit("lobby:leave");
-      s.off("onlineCount", handleOnline);
+      s.off("onlineCount", handleOnlineCount);
       s.off("chat:newMessage", handleNewMessage);
       s.off("room:joined", handleRoomJoined);
     };
-  }, [socket, user, navigate]);
+  }, [socket, navigate]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
     const s = socket || getSocket();
-    if (!s || !chatInput.trim()) return;
+    const text = chatInput.trim();
+    if (!s || !text) return;
 
-    // ✅ include username so it shows in UI for everyone
     s.emit("chat:message", {
-      text: chatInput,
-      username: user?.username,
+      text,
+      username: user ? user.username : "User",
     });
 
     setChatInput("");

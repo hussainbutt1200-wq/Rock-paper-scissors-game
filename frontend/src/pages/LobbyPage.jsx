@@ -1,3 +1,4 @@
+// frontend/src/pages/LobbyPage.jsx
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -16,21 +17,22 @@ const LobbyPage = () => {
     const s = socket || getSocket();
     if (!s) return;
 
-    // how many players online
-    s.on("onlineCount", (count) => setOnlineCount(count));
+    // 👉 IMPORTANT: tell backend we entered the lobby
+    s.emit("lobby:join");
 
-    // global chat messages
+    // listen for events
+    s.on("onlineCount", (count) => setOnlineCount(count));
     s.on("chat:newMessage", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
-
-    // matchmaking -> go to room
     s.on("room:joined", (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
     });
 
+    // cleanup on unmount / navigate away
     return () => {
+      s.emit("lobby:leave");
       s.off("onlineCount");
       s.off("chat:newMessage");
       s.off("room:joined");
@@ -41,13 +43,7 @@ const LobbyPage = () => {
     e.preventDefault();
     const s = socket || getSocket();
     if (!s || !chatInput.trim()) return;
-
-    // 👉 send username along with the text
-    s.emit("chat:message", {
-      text: chatInput.trim(),
-      username: user?.username || "Guest",
-    });
-
+    s.emit("chat:message", { text: chatInput });
     setChatInput("");
   };
 

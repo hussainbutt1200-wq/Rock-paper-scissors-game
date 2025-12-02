@@ -44,9 +44,10 @@ const LobbyPage = () => {
     const text = chatInput.trim();
     if (!s || !text) return;
 
+    // send global chat message
     s.emit("chat:message", {
       text,
-      username: user?.username, // backend still uses DB username but this is fine
+      username: user?.username, // backend still uses DB username but it's fine
     });
 
     setChatInput("");
@@ -60,71 +61,113 @@ const LobbyPage = () => {
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 10,
-        }}
-      >
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      {/* Top bar */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/70 backdrop-blur">
         <div>
-          <h2>Lobby</h2>
-          <p>Online players: {onlineCount}</p>
+          <h1 className="text-xl font-semibold">Lobby</h1>
+          <p className="text-sm text-slate-400">
+            Online players:{" "}
+            <span className="text-emerald-400 font-semibold">
+              {onlineCount}
+            </span>
+          </p>
         </div>
-        <div>
-          <span style={{ marginRight: 10 }}>
-            Logged in as: <strong>{user?.username}</strong>
+
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-slate-300">
+            Logged in as{" "}
+            <span className="font-semibold text-emerald-300">
+              {user?.username}
+            </span>
           </span>
-          <button onClick={logout} style={{ marginRight: 10 }}>
+
+          <Link
+            to="/leaderboard"
+            className="px-3 py-1.5 rounded-lg border border-emerald-500/60 text-sm text-emerald-300 hover:bg-emerald-500/10 transition"
+          >
+            Leaderboard
+          </Link>
+
+          <button
+            onClick={logout}
+            className="px-3 py-1.5 rounded-lg bg-red-500/80 hover:bg-red-500 text-sm font-medium transition"
+          >
             Logout
           </button>
-          <Link to="/leaderboard">
-            <button>Leaderboard</button>
-          </Link>
         </div>
       </header>
 
-      <button onClick={handleJoinQueue} disabled={searching}>
-        {searching ? "Searching for players..." : "Join Matchmaking Queue"}
-      </button>
+      {/* Main content */}
+      <main className="flex-1 px-6 py-5 flex flex-col lg:flex-row gap-6">
+        {/* Matchmaking card */}
+        <section className="w-full lg:w-1/3 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <h2 className="text-lg font-semibold mb-2">Matchmaking</h2>
+          <p className="text-sm text-slate-400 mb-4">
+            Click the button to join the queue and get matched with another
+            player. You’ll be moved into a private game room automatically.
+          </p>
 
-      <div
-        style={{
-          marginTop: 20,
-          display: "flex",
-          gap: 20,
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <h3>Global Chat</h3>
-          <div
-            style={{
-              border: "1px solid #ccc",
-              height: 300,
-              overflowY: "auto",
-              padding: 10,
-            }}
+          <button
+            onClick={handleJoinQueue}
+            disabled={searching}
+            className={`w-full py-3 rounded-xl font-semibold transition ${
+              searching
+                ? "bg-slate-700 text-slate-300 cursor-not-allowed"
+                : "bg-emerald-500 hover:bg-emerald-400 text-slate-950"
+            }`}
           >
+            {searching ? "Searching for players…" : "Join Matchmaking Queue"}
+          </button>
+        </section>
+
+        {/* Global chat card */}
+        <section className="flex-1 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold">Global Chat</h2>
+            <span className="text-xs text-slate-400">
+              Chat with everyone in the lobby.
+            </span>
+          </div>
+
+          {/* Messages box */}
+          <div className="flex-1 mt-2 mb-3 overflow-y-auto space-y-2 rounded-xl bg-slate-950/70 border border-slate-800 p-3">
+            {messages.length === 0 && (
+              <p className="text-sm text-slate-500 text-center mt-10">
+                No messages yet. Say hi 👋
+              </p>
+            )}
             {messages.map((m, i) => (
-              <div key={i}>
-                <strong>{m.username || "User"}:</strong> {m.text}
+              <div key={i} className="text-sm">
+                <span className="font-semibold text-emerald-300">
+                  {m.username || "User"}
+                </span>
+                <span className="text-slate-500">: </span>
+                <span>{m.text}</span>
               </div>
             ))}
           </div>
-          <form onSubmit={handleSendMessage} style={{ marginTop: 10 }}>
+
+          {/* Input */}
+          <form
+            onSubmit={handleSendMessage}
+            className="flex items-center gap-2 mt-auto"
+          >
             <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Type message..."
-              style={{ width: "80%" }}
+              placeholder="Type a message..."
+              className="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
-            <button type="submit" style={{ marginLeft: 5 }}>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm transition"
+            >
               Send
             </button>
           </form>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 };

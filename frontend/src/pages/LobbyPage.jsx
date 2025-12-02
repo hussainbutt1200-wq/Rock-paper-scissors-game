@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { getSocket } from "../services/socket";
 
 const LobbyPage = () => {
   const { user, logout, socket } = useAuth();
@@ -14,44 +13,46 @@ const LobbyPage = () => {
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    const s = socket || getSocket();
-    if (!s) return;
+    // wait until we actually have a user + socket
+    if (!user || !socket) return;
 
-    // 👉 IMPORTANT: tell backend we entered the lobby
-    s.emit("lobby:join");
+    // 👉 tell backend this user entered the lobby
+    socket.emit("lobby:join");
 
-    // listen for events
-    s.on("onlineCount", (count) => setOnlineCount(count));
-    s.on("chat:newMessage", (msg) => {
+    const handleOnlineCount = (count) => setOnlineCount(count);
+    const handleNewMessage = (msg) =>
       setMessages((prev) => [...prev, msg]);
-    });
-    s.on("room:joined", (payload) => {
+    const handleRoomJoined = (payload) => {
       setSearching(false);
       navigate(`/room/${payload.roomId}`, { state: payload });
-    });
-
-    // cleanup on unmount / navigate away
-    return () => {
-      s.emit("lobby:leave");
-      s.off("onlineCount");
-      s.off("chat:newMessage");
-      s.off("room:joined");
     };
-  }, [socket, navigate]);
+
+    socket.on("onlineCount", handleOnlineCount);
+    socket.on("chat:newMessage", handleNewMessage);
+    socket.on("room:joined", handleRoomJoined);
+
+    // cleanup when leaving lobby
+    return () => {
+      socket.emit("lobby:leave");
+      socket.off("onlineCount", handleOnlineCount);
+      socket.off("chat:newMessage", handleNewMessage);
+      socket.off("room:joined", handleRoomJoined);
+    };
+  }, [user, socket, navigate]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    const s = socket || getSocket();
-    if (!s || !chatInput.trim()) return;
-    s.emit("chat:message", { text: chatInput });
+    if (!socket || !chatInput.trim()) return;
+
+    // send message to backend; backend will broadcast chat:newMessage
+    socket.emit("chat:message", { text: chatInput });
     setChatInput("");
   };
 
   const handleJoinQueue = () => {
-    const s = socket || getSocket();
-    if (!s) return;
+    if (!socket) return;
     setSearching(true);
-    s.emit("queue:join");
+    socket.emit("queue:join");
   };
 
   return (
